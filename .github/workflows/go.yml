@@ -38,6 +38,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go
 
+      - name: Tidy
+        run: make tidy
+
       - name: Test
         run: make test-coverage
 
