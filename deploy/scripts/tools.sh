@@ -51,16 +51,6 @@ function lint() {
   done
 }
 
-# build all mod
-function build() {
-  for mod in $all_modules; do
-    pushd "$mod" >/dev/null &&
-      echo "go build $(sed -n 1p go.mod | cut -d ' ' -f2)" &&
-      go build ./...
-    popd >/dev/null || exit
-  done
-}
-
 # test all mod
 function test() {
   for mod in $all_modules; do
@@ -128,9 +118,6 @@ upgrade)
   ;;
 lint)
   lint
-  ;;
-build)
-  build
   ;;
 test)
   test

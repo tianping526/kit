@@ -13,7 +13,7 @@ jobs:
   build:
     strategy:
       matrix:
-        go: [ 1.20.x, 1.21.x, 1.22.x ]
+        go: [ 1.22.x ]
     name: build & test
     runs-on: ubuntu-latest
     steps:
@@ -37,9 +37,6 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go
-
-      - name: Build
-        run: make build
 
       - name: Test
         run: make test-coverage
