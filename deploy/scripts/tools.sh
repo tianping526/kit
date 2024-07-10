@@ -27,6 +27,16 @@ ignored_modules=()
 while IFS='' read -r line; do ignored_modules+=("$line"); done < <(cat "$IGNORED_FILE")
 
 # functions
+# upgrade all mod
+function upgrade() {
+  for mod in $all_modules; do
+    pushd "$mod" >/dev/null &&
+      echo "go upgrade $(sed -n 1p go.mod | cut -d ' ' -f2)" &&
+      go get -u -t ./...
+    popd >/dev/null || exit
+  done
+}
+
 # lint all mod
 function lint() {
   for mod in $all_modules; do
@@ -38,6 +48,16 @@ function lint() {
         eval "${LINTER} run --timeout=5m --config=${LINTER_CONFIG}"
       popd >/dev/null || exit
     fi
+  done
+}
+
+# build all mod
+function build() {
+  for mod in $all_modules; do
+    pushd "$mod" >/dev/null &&
+      echo "go build $(sed -n 1p go.mod | cut -d ' ' -f2)" &&
+      go build ./...
+    popd >/dev/null || exit
   done
 }
 
@@ -103,8 +123,14 @@ function help() {
 }
 
 case $1 in
+upgrade)
+  upgrade
+  ;;
 lint)
   lint
+  ;;
+build)
+  build
   ;;
 test)
   test

@@ -5,6 +5,12 @@ LINTER := bin/golangci-lint
 $(LINTER):
 	curl -SL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s latest
 
+.PHONY: upgrade
+# upgrade all mod
+upgrade:
+	@${TOOLS_SHELL} upgrade $(dir)
+	@echo "upgrade finished"
+
 .PHONY: tidy
 # tidy all mod
 tidy:
@@ -22,6 +28,12 @@ fix: $(LINTER)
 lint: $(LINTER)
 	@${TOOLS_SHELL} lint $(dir)
 	@echo "lint check finished"
+
+.PHONY: build
+# build module
+build:
+	@${TOOLS_SHELL} build $(dir)
+	@echo "go build finished"
 
 .PHONY: test
 # test module
