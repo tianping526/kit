@@ -9,9 +9,9 @@ set -o errexit
 echo "Resolving modules in $(pwd)"
 
 PROJECT_HOME=$(
-	cd "$(dirname "${BASH_SOURCE[0]}")" &&
-		cd .. &&
-		pwd
+  cd "$(dirname "${BASH_SOURCE[0]}")" &&
+    cd ../.. &&
+    pwd
 )
 
 source "${PROJECT_HOME}/deploy/scripts/util.sh"
