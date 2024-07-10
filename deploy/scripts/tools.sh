@@ -118,10 +118,6 @@ function tidy() {
   done
 }
 
-function help() {
-  echo "use: lint, test, test_coverage, fix, tidy"
-}
-
 case $1 in
 upgrade)
   upgrade
@@ -143,8 +139,5 @@ tidy)
   ;;
 fix)
   fix
-  ;;
-*)
-  help
   ;;
 esac
