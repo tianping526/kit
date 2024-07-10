@@ -29,6 +29,12 @@ lint: $(LINTER)
 	@${TOOLS_SHELL} lint $(dir)
 	@echo "lint check finished"
 
+.PHONY: build
+# build all mod
+build:
+	@${TOOLS_SHELL} build $(dir)
+	@echo "build finished"
+
 .PHONY: test
 # test module
 test:
