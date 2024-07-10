@@ -22,6 +22,7 @@ jobs:
         uses: actions/setup-go@v5.0.1
         with:
           go-version: ${{ matrix.go }}
+          cache-dependency-path: "**/go.sum"
 
       - name: Setup Environment
         run: |
