@@ -4,13 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 	"net"
 	"strconv"
 	"strings"
 
 	"github.com/go-kratos/kratos/v2/log"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 
 	// Register go-sql-driver stuff
 	_ "github.com/go-sql-driver/mysql"
@@ -52,7 +52,7 @@ func (c *Container) Healthcheck() error {
 			if tcpConn, err = net.DialTCP("tcp", nil, tcpAddr); err != nil {
 				return fmt.Errorf("net.DialTCP(%s:%s) error(%v)", publish.HostIP, publish.HostPort, err)
 			}
-			return tcpConn.Close()
+			_ = tcpConn.Close()
 		}
 	}
 	return nil
