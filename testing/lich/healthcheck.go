@@ -1,8 +1,11 @@
 package lich
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"net"
 	"strconv"
 	"strings"
@@ -14,18 +17,24 @@ import (
 	_ "github.com/jackc/pgx/v4/stdlib"
 )
 
-var healthchecks = map[string]func(*Container) error{"mysql": checkMysql, "mariadb": checkMysql, "postgres": checkPg}
+var healthchecks = map[string]func(*Container) error{
+	"mysql":    checkMysql,
+	"mariadb":  checkMysql,
+	"postgres": checkPg,
+	"mongo":    checkMongo,
+}
 
 // Healthcheck check container health.
-func (c *Container) Healthcheck() (err error) {
-	if status, health := c.State.Status, c.State.Health.Status; !c.State.Running || (health != "" && health != "healthy") {
-		err = fmt.Errorf("service: %s | container: %s not running", c.GetImage(), c.GetID())
-		log.Errorf("docker status(%s) health(%s) error(%v)", status, health, err)
-		return
+func (c *Container) Healthcheck() error {
+	status, health := c.State.Status, c.State.Health.Status
+	if !c.State.Running || (health != "" && health != "healthy") {
+		return fmt.Errorf(
+			"docker status(%s) health(%s) error(service: %s | container: %s not running)",
+			status, health, c.GetImage(), c.GetID(),
+		)
 	}
 	if check, ok := healthchecks[c.GetImage()]; ok {
-		err = check(c)
-		return
+		return check(c)
 	}
 	for proto, ports := range c.NetworkSettings.Ports {
 		if id := c.GetID(); !strings.Contains(proto, "tcp") {
@@ -38,18 +47,18 @@ func (c *Container) Healthcheck() (err error) {
 				port, _ = strconv.Atoi(publish.HostPort)
 				tcpAddr = &net.TCPAddr{IP: ip, Port: port}
 				tcpConn *net.TCPConn
+				err     error
 			)
 			if tcpConn, err = net.DialTCP("tcp", nil, tcpAddr); err != nil {
-				log.Errorf("net.DialTCP(%s:%s) error(%v)", publish.HostIP, publish.HostPort, err)
-				return
+				return fmt.Errorf("net.DialTCP(%s:%s) error(%v)", publish.HostIP, publish.HostPort, err)
 			}
-			err = tcpConn.Close()
+			return tcpConn.Close()
 		}
 	}
-	return
+	return nil
 }
 
-func checkMysql(c *Container) (err error) {
+func checkMysql(c *Container) error {
 	var ip, port, user, passwd string
 	for _, env := range c.Config.Env {
 		splits := strings.Split(env, "=")
@@ -70,25 +79,27 @@ func checkMysql(c *Container) (err error) {
 			continue
 		}
 	}
-	var db *sql.DB
+	var (
+		db  *sql.DB
+		err error
+	)
 	if ports, ok := c.NetworkSettings.Ports["3306/tcp"]; ok {
 		ip, port = ports[0].HostIP, ports[0].HostPort
 	}
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/", user, passwd, ip, port)
 	if db, err = sql.Open("mysql", dsn); err != nil {
-		log.Errorf("sql.Open(mysql) dsn(%s) error(%v)", dsn, err)
-		return
+		return fmt.Errorf("sql.Open(mysql) dsn(%s) error(%v)", dsn, err)
 	}
 	defer func(db *sql.DB) {
 		_ = db.Close()
 	}(db)
 	if err = db.Ping(); err != nil {
-		log.Errorf("ping(db) dsn(%s) error(%v)", dsn, err)
+		return fmt.Errorf("ping(db) dsn(%s) error(%v)", dsn, err)
 	}
-	return
+	return nil
 }
 
-func checkPg(c *Container) (err error) {
+func checkPg(c *Container) error {
 	var ip, port, user, passwd, dbName string
 	user = "postgres"
 	for _, env := range c.Config.Env {
@@ -109,20 +120,58 @@ func checkPg(c *Container) (err error) {
 	if dbName == "" {
 		dbName = user
 	}
-	var db *sql.DB
+	var (
+		db  *sql.DB
+		err error
+	)
 	if ports, ok := c.NetworkSettings.Ports["5432/tcp"]; ok {
 		ip, port = ports[0].HostIP, ports[0].HostPort
 	}
 	dsn := fmt.Sprintf("postgresql://%s:%s@%s:%s/%s", user, passwd, ip, port, dbName)
 	if db, err = sql.Open("pgx", dsn); err != nil {
-		log.Errorf("sql.Open(pgx) dsn(%s) error(%v)", dsn, err)
-		return
+		return fmt.Errorf("sql.Open(pgx) dsn(%s) error(%v)", dsn, err)
 	}
 	defer func(db *sql.DB) {
 		_ = db.Close()
 	}(db)
 	if err = db.Ping(); err != nil {
-		log.Errorf("ping(db) dsn(%s) error(%v)", dsn, err)
+		return fmt.Errorf("ping(db) dsn(%s) error(%v)", dsn, err)
 	}
-	return
+	return nil
+}
+
+func checkMongo(c *Container) error {
+	var ip, port, user, passwd string
+	for _, env := range c.Config.Env {
+		splits := strings.Split(env, "=")
+		if strings.Contains(splits[0], "MONGO_INITDB_ROOT_USERNAME") {
+			user = splits[1]
+			continue
+		}
+		if strings.Contains(splits[0], "MONGO_INITDB_ROOT_PASSWORD") {
+			passwd = splits[1]
+			continue
+		}
+	}
+
+	if ports, ok := c.NetworkSettings.Ports["27017/tcp"]; ok {
+		ip, port = ports[0].HostIP, ports[0].HostPort
+	}
+
+	db, err := mongo.Connect(
+		context.Background(),
+		options.Client().ApplyURI(
+			fmt.Sprintf("mongodb://%s:%s@%s:%s", user, passwd, ip, port),
+		),
+	)
+	if err != nil {
+		return fmt.Errorf("mongo.Connect error(%v)", err)
+	}
+	defer func(mc *mongo.Client) {
+		_ = mc.Disconnect(context.Background())
+	}(db)
+	if err = db.Ping(context.Background(), nil); err != nil {
+		return fmt.Errorf("ping(mongo) error(%v)", err)
+	}
+	return nil
 }
